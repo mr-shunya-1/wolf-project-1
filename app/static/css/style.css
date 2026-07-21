@@ -1,0 +1,11 @@
+body {
+  background-color: #f7f7f5;
+}
+
+.card {
+  border-radius: 0.75rem;
+}
+
+.nav-tabs .nav-link {
+  text-transform: capitalize;
+}

@@ -9,3 +9,4 @@ celerybeat-schedule
 celerybeat.pid
 *.log
 .DS_Store
+app/static/exports/*.csv
