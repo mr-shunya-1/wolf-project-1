@@ -52,7 +52,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-`requirements.txt` (installed above) covers: `flask`, `flask-sqlalchemy`, `flask-caching`, `celery`, `redis`, `flask-mail`, `python-dotenv`, `reportlab` (or `weasyprint`, for PDF reports).
+`requirements.txt` (installed above) covers: `Flask`, `Flask-SQLAlchemy`, `Flask-Caching`, `celery`, `redis`, `Werkzeug`, `python-dotenv`. Outbound email uses the standard library `smtplib`; the Google Chat reminder uses `urllib` — no extra mail/PDF packages are required.
 
 ## Running the app locally
 
@@ -67,7 +67,7 @@ redis-server
 **Terminal 2 — Celery worker + beat** (handles reminders, monthly reports, CSV export):
 
 ```bash
-celery -A app.tasks worker --beat --loglevel=info
+celery -A celery_worker.celery worker --beat --loglevel=info
 ```
 
 **Terminal 3 — Flask app** (creates the SQLite DB and the single Admin account on first launch):
@@ -76,44 +76,47 @@ celery -A app.tasks worker --beat --loglevel=info
 python run.py
 ```
 
-Then open **http://localhost:5000** in your browser.
+Then open **http://127.0.0.1:5001** in your browser.
+
+> **macOS note:** port `5000` is claimed by default by the AirPlay Receiver (Control Center), which will silently intercept the connection and show a confusing 403 page instead of a normal "connection refused". `run.py` therefore defaults to port **5001** — override with the `PORT` env var if you need a different one, and don't fight over `5000` unless you've disabled AirPlay Receiver in System Settings → General → AirDrop & Handoff.
 
 ## Default ports
 
 | Service | Default port | Configurable via |
 |---|---|---|
-| Flask app | `5000` | `FLASK_RUN_PORT` in `.env` |
+| Flask app | `5001` | `PORT` env var |
 | Redis | `6379` | `REDIS_URL` in `.env` |
 | Celery | no listening port (connects out to Redis) | `CELERY_BROKER_URL` in `.env` |
 
-If port `5000` or `6379` is already taken on your machine, change the corresponding value in `.env` and restart the affected process.
+If port `6379` is already taken on your machine, change `REDIS_URL` (and the matching `CELERY_*` urls) in `.env` and restart the affected process.
 
 ## Environment variables (`.env`)
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `FLASK_RUN_PORT` | `5000` | Flask dev server port |
-| `SECRET_KEY` | *(set your own)* | Flask session signing key |
-| `SQLALCHEMY_DATABASE_URI` | `sqlite:///tma.db` | SQLite file location |
+| `PORT` | `5001` | Flask dev server port |
+| `FLASK_SECRET` | *(set your own)* | Flask session signing key |
+| `SQLITE_PATH` | `sqlite:///tma.db` | SQLite file location |
 | `REDIS_URL` | `redis://localhost:6379/0` | Cache backend |
 | `CELERY_BROKER_URL` | `redis://localhost:6379/1` | Celery broker |
 | `CELERY_RESULT_BACKEND` | `redis://localhost:6379/2` | Celery result store |
-| `MAIL_SERVER` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` | *(your SMTP)* | Outbound email for reminders & monthly report |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | `admin@tma.local` / `admin123` | Seeded on first run — **change after first login** |
+| `MAIL_SERVER` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` | *(your SMTP)* | Outbound email for reminders & monthly report — left blank, mail is skipped and logged to stdout instead |
+| `GCHAT_WEBHOOK_URL` | *(your webhook)* | Google Chat reminder delivery — left blank, pings are skipped and logged to stdout instead |
+| `BOSS_HANDLE` / `BOSS_CIPHER` | `overseer` / `change-me-please` | The single Admin account, seeded on first run — **change `BOSS_CIPHER` before first launch** |
 
 ## First run — what happens automatically
 
 On the first `python run.py`:
 
-1. SQLite tables are created programmatically (`app/seed.py`), never via manual DB tooling.
-2. The single Admin account is created from `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`.
+1. SQLite tables are created programmatically (`app/models.py` + `ledger.create_all()`), never via manual DB tooling.
+2. The single Admin account is created from `BOSS_HANDLE` / `BOSS_CIPHER` in `.env`.
 3. No further manual setup is needed — register a Trekker account from the UI, and have the Admin create Staff accounts and treks from the Admin dashboard.
 
 ## Logging in
 
 | Role | How to get an account |
 |---|---|
-| Admin | Pre-seeded — use `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env` |
+| Admin | Pre-seeded — use `BOSS_HANDLE` / `BOSS_CIPHER` from `.env` |
 | Trek Staff | Created by Admin from the Admin dashboard (no self-registration) |
 | User (Trekker) | Self-register from the app's Register page |
 
@@ -129,7 +132,8 @@ On the first `python run.py`:
 
 - **`redis.exceptions.ConnectionError`** — Redis isn't running; start it with `redis-server`, or check `REDIS_URL` in `.env`.
 - **Celery tasks never run** — confirm the worker+beat terminal is still open and pointed at the same Redis instance as the Flask app.
-- **Port already in use** — change `FLASK_RUN_PORT` in `.env`, or stop whatever else is bound to `5000`.
+- **"Access to localhost was denied" / HTTP 403 on port 5000** — that's macOS AirPlay Receiver, not Flask; use port `5001` (the default here) instead, or disable AirPlay Receiver in System Settings.
+- **Port already in use** — set `PORT` to a free port and restart `python run.py`.
 - **DB looks stale/corrupted** — delete `tma.db` and restart `python run.py`; it will be recreated and re-seeded.
 
 ## Note on code style
