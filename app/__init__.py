@@ -1,8 +1,11 @@
 import os
+from dotenv import load_dotenv
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_caching import Cache
 from celery import Celery
+
+load_dotenv()
 
 ledger = SQLAlchemy()
 stash = Cache()
